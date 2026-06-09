@@ -180,11 +180,13 @@ onMounted(async () => {
 })
 
 const loadNext = async () => {
-  const res = await fetch(`/api/resumes/${resumeId}/chat`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'next' }),
-  })
-  const d = await res.json()
+  try {
+    const res = await fetch(`/api/resumes/${resumeId}/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'next' }),
+    })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const d = await res.json()
   const data = d.data
   aiMessage.value = data.reply
   currentModule.value = data.module
@@ -196,10 +198,14 @@ const loadNext = async () => {
   } else {
     progress.value = Math.min(90, Math.round(progress.value + 14))
   }
-  selectedItems.value = []
-  customInput.value = ''
-  await nextTick()
-  chatRef.value?.scrollTo({ top: chatRef.value.scrollHeight, behavior: 'smooth' })
+    selectedItems.value = []
+    customInput.value = ''
+    await nextTick()
+    chatRef.value?.scrollTo({ top: chatRef.value.scrollHeight, behavior: 'smooth' })
+  } catch(e) {
+    console.error('loadNext failed:', e)
+    aiMessage.value = '网络异常，请刷新页面重试'
+  }
 }
 
 const submitPersonal = async () => {

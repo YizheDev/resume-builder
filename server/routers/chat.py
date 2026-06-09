@@ -64,12 +64,24 @@ async def chat(resume_id: int, req: ChatRequest, db: Session = Depends(get_db)):
 
 async def _get_module_options(module: str, role: str, collected: dict, selections: dict) -> dict:
     """为当前模块生成选项"""
+    import logging
+    _log = logging.getLogger(__name__)
+
     option_map = {
         "education": ("education_courses", "📚 教育背景 — 请勾选相关课程"),
         "awards": ("awards", "🏆 奖项荣誉 — 请勾选你获得的荣誉"),
         "experience": ("experience", "💼 实习经历 — 请勾选你做过的内容"),
         "projects": ("projects", "📦 项目经历 — 请勾选你做过的项目类型"),
         "skills": ("skills_must", "🛠️ 必备技能 — 请勾选你掌握的技能"),
+    }
+    fallback_options = {
+        "education": [{"id":"c1","label":"数据结构"},{"id":"c2","label":"操作系统"},{"id":"c3","label":"计算机网络"},{"id":"c4","label":"数据库原理"}],
+        "awards": [{"id":"a1","label":"校级奖学金"},{"id":"a2","label":"优秀学生"},{"id":"a3","label":"竞赛获奖"},{"id":"a4","label":"优秀毕业生"}],
+        "experience": [{"id":"e1","label":"后端API开发"},{"id":"e2","label":"数据库设计与优化"},{"id":"e3","label":"前端页面开发"},{"id":"e4","label":"技术文档编写"}],
+        "projects": [{"id":"p1","label":"个人博客系统"},{"id":"p2","label":"电商网站"},{"id":"p3","label":"数据分析工具"},{"id":"p4","label":"移动App"}],
+        "skills_must": [{"id":"s1","label":"编程语言"},{"id":"s2","label":"Web框架"},{"id":"s3","label":"数据库"},{"id":"s4","label":"版本控制"}],
+        "skills_plus": [{"id":"sp1","label":"Docker"},{"id":"sp2","label":"CI/CD"},{"id":"sp3","label":"云服务"}],
+        "skills_optional": [{"id":"so1","label":"前端基础"},{"id":"so2","label":"Linux"}],
     }
 
     if module == "personal":
@@ -114,7 +126,14 @@ async def _get_module_options(module: str, role: str, collected: dict, selection
 
     if module in option_map:
         key, greeting = option_map[module]
-        options = await llm_service.generate_module_options(key, role, collected)
+        try:
+            options = await llm_service.generate_module_options(key, role, collected)
+            if not options or len(options) < 2:
+                options = fallback_options.get(key, [{"id":"x1","label":"其他"}])
+            _log.info(f"Module {module}: {len(options)} options")
+        except Exception as e:
+            _log.warning(f"LLM failed for {module}: {e}, using fallback")
+            options = fallback_options.get(key, [{"id":"x1","label":"其他"}])
         return {
             "code": 0,
             "data": {
