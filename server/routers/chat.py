@@ -29,10 +29,20 @@ async def chat(resume_id: int, req: ChatRequest, db: Session = Depends(get_db)):
     selections = resume.selections or {}
     role = resume.role
 
-    # 获取当前进度
+    # 获取当前进度（personal 通过 data.personal 判断是否完成）
     modules = ["personal", "education", "awards", "experience", "projects", "skills", "summary"]
-    current_idx = next((i for i, m in enumerate(modules) if m not in selections), 0)
-    current_module = modules[current_idx] if current_idx < len(modules) else "done"
+    current_module = "personal"
+    for m in modules:
+        if m == "personal":
+            if collected.get("personal", {}).get("name"):  # personal 已填
+                continue
+            current_module = "personal"
+            break
+        elif m not in selections:
+            current_module = m
+            break
+    else:
+        current_module = "done"
 
     if current_module == "done":
         return {"code": 0, "data": {"reply": "所有模块已完成！请点击生成简历。", "module": None, "options": None, "status": "ready"}}

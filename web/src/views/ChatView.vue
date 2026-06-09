@@ -22,8 +22,24 @@
           </div>
         </div>
 
+        <!-- Person form -->
+        <div v-if="currentModule === 'personal' && status === 'chatting'" class="ml-13 space-y-3">
+          <div class="bg-white border border-gray-100 rounded-2xl p-5 space-y-3 shadow-sm">
+            <div class="grid grid-cols-2 gap-3">
+              <input v-model="personalForm.name" placeholder="姓名" class="p-2.5 border border-gray-200 rounded-lg text-sm" />
+              <input v-model="personalForm.phone" placeholder="电话" class="p-2.5 border border-gray-200 rounded-lg text-sm" />
+              <input v-model="personalForm.email" placeholder="邮箱" class="p-2.5 border border-gray-200 rounded-lg text-sm" />
+              <input v-model="personalForm.city" placeholder="城市" class="p-2.5 border border-gray-200 rounded-lg text-sm" />
+            </div>
+            <div class="flex gap-2 pt-2">
+              <button @click="submitPersonal" class="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 shadow-sm transition">✅ 确认，继续</button>
+              <button @click="skipModule" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50 transition">⏭️ 跳过</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Options -->
-        <div v-if="currentOptions && status !== 'draft'" class="ml-13 space-y-3 pl-2">
+        <div v-if="currentOptions && currentModule !== 'personal' && status !== 'draft'" class="ml-13 space-y-3 pl-2">
           <template v-if="currentModule === 'skills' && typeof currentOptions === 'object' && !Array.isArray(currentOptions)">
             <div class="space-y-4">
               <div v-if="currentOptions.must">
@@ -138,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -149,6 +165,7 @@ const currentModule = ref('')
 const currentOptions = ref(null)
 const selectedItems = ref([])
 const customInput = ref('')
+const personalForm = reactive({ name: '', phone: '', email: '', city: '' })
 const status = ref('chatting')
 const progress = ref(0)
 const jdText = ref('')
@@ -173,11 +190,25 @@ const loadNext = async () => {
   currentModule.value = data.module
   currentOptions.value = data.options
   status.value = data.status || 'chatting'
-  progress.value = data.module === 'done' ? 100 : Math.min(95, Math.round(progress.value + 14))
+  if (data.module === 'done' || data.status === 'ready') {
+    progress.value = 100
+    status.value = 'draft'
+  } else {
+    progress.value = Math.min(90, Math.round(progress.value + 14))
+  }
   selectedItems.value = []
   customInput.value = ''
   await nextTick()
   chatRef.value?.scrollTo({ top: chatRef.value.scrollHeight, behavior: 'smooth' })
+}
+
+const submitPersonal = async () => {
+  await fetch(`/api/resumes/${resumeId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { personal: { ...personalForm } } }),
+  })
+  Object.assign(previewData.personal, personalForm)
+  loadNext()
 }
 
 const submitSelections = async () => {

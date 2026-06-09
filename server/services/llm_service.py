@@ -1,9 +1,12 @@
 """DeepSeek LLM 服务 — 岗位分析 / 选项生成 / 内容润色 / 简历生成"""
 
 import json
+import logging
 import httpx
 
 from server.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -53,15 +56,15 @@ class LLMService:
     async def generate_module_options(self, module: str, role: str, collected: dict) -> list[dict]:
         """为指定模块生成可供用户勾选的高质量内容选项"""
         prompts = {
-            "education_courses": f"为{role}岗位列出10门最相关的大学课程，输出 JSON 数组 [{id:, label:}]",
-            "awards": f"为{role}岗位的在校生/应届生列出8项可能获得的荣誉奖项，输出 JSON 数组 [{id:, label:}]",
-            "experience": f"列出{role}岗位实习生/初级工程师最常做的工作内容，输出 JSON 数组 [{id:, label:}]，共12项",
-            "projects": f"列出{role}岗位常见的项目类型（课程设计/个人项目都可），输出 JSON 数组 [{id:, label:}]，共8项",
-            "skills_must": f"列出{role}岗位的必备技能（必须是该岗位的核心技能），输出 JSON 数组 [{id:, label:}]，共6项",
-            "skills_plus": f"列出{role}岗位的加分技能，输出 JSON 数组 [{id:, label:}]，共6项",
-            "skills_optional": f"列出{role}岗位的了解即可技能，输出 JSON 数组 [{id:, label:}]，共4项",
+            "education_courses": f"为{role}岗位列出10门最相关的大学课程，输出 JSON 数组 [{{'id':'','label':''}}]",
+            "awards": f"为{role}岗位的在校生/应届生列出8项可能获得的荣誉奖项，输出 JSON 数组 [{{'id':'','label':''}}]",
+            "experience": f"列出{role}岗位实习生/初级工程师最常做的工作内容，输出 JSON 数组 [{{'id':'','label':''}}]，共12项",
+            "projects": f"列出{role}岗位常见的项目类型，输出 JSON 数组 [{{'id':'','label':''}}]，共8项",
+            "skills_must": f"列出{role}岗位的必备技能，输出 JSON 数组 [{{'id':'','label':''}}]，共6项",
+            "skills_plus": f"列出{role}岗位的加分技能，输出 JSON 数组 [{{'id':'','label':''}}]，共6项",
+            "skills_optional": f"列出{role}岗位的了解即可技能，输出 JSON 数组 [{{'id':'','label':''}}]，共4项",
         }
-        prompt = prompts.get(module, f"为{role}岗位列出{module}相关的8项内容，输出 JSON 数组 [{id:, label:}]")
+        prompt = prompts.get(module, f"为{role}岗位列出{module}相关的8项内容，输出 JSON 数组 [{{'id':'','label':''}}]")
         result = await self._chat("输出 JSON 数组，不要其他文字。", prompt, temperature=0.9)
         return self._parse_json(result, [])
 
@@ -134,14 +137,20 @@ highlight 必须用 STAR 法则，每条15-30字中文。summary 100-150字。
 
     def _parse_json(self, text: str, default):
         """安全解析 JSON"""
+        import logging
+        log = logging.getLogger(__name__)
         try:
             text = text.strip()
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0]
-            return json.loads(text)
-        except (json.JSONDecodeError, IndexError):
+            result = json.loads(text)
+            if isinstance(result, list):
+                log.info(f"Parsed JSON array with {len(result)} items")
+            return result
+        except (json.JSONDecodeError, IndexError) as e:
+            log.warning(f"JSON parse failed: {e}, raw text: {text[:200]}")
             return default
 
 
