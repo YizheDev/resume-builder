@@ -223,8 +223,7 @@ const submitSelections = async () => {
     if (selectedItems.value.length) updatePreview()
   }
   if (status.value === 'draft') return
-  await nextTick()
-  chatRef.value?.scrollTo({ top: chatRef.value.scrollHeight, behavior: 'smooth' })
+  loadNext()
 }
 
 const selectSummary = async (o) => {
