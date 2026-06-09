@@ -14,9 +14,14 @@ langchain==0.3.0
 langchain-community==0.3.0
 agentscope==1.0.0
 
+# MCP Client
+mcp>=1.0.0
+
+# Vector DB
+chromadb==0.5.0
+
 # PDF Generation
 weasyprint==62.0
-mcp==1.0.0
 
 # Utils
 python-dotenv==1.0.1

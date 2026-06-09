@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.config import settings
 from server.database import engine, Base
-from server.routers import analyze, resumes, chat, export
+from server.routers import analyze, resumes, chat, export, skills
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app.include_router(analyze.router, prefix="/api")
 app.include_router(resumes.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
+app.include_router(skills.router, prefix="/api")
 
 # 生产环境挂载前端静态文件
 if os.path.exists("static"):
