@@ -1,0 +1,36 @@
+# 编译产物
+server/resume-builder
+server/static/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 环境配置
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.bak
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# AI 工具
+.claude/
+.understand-anything/
+
+# 前端构建
+web/dist/
+.vite/
