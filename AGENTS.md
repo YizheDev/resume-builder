@@ -2,9 +2,9 @@
 
 ## 0. 项目身份
 
-- 项目名称：Resume Builder（简历生成器）
-- 项目描述：在线简历编辑与 PDF 导出工具，类似超级简历的精简版
-- 技术栈：Go 1.21 + Vue 3 + Vite + MySQL 8.4
+- 项目名称：Resume Builder（AI 简历生成器）
+- 项目描述：AI 驱动的简历生成工具，通过问答式交互自动生成多份专业简历
+- 技术栈：Go 1.21 + Vue 3 + Vite + MySQL 8.4 + DeepSeek API
 - 当前阶段：需求设计阶段（未开始编码）
 - 部署位置：Docker 容器，与 ezer-ai-assistant 同服务器(47.113.110.222)
 - 访问地址：http://47.113.110.222:8081
