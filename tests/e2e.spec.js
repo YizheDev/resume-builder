@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const BASE = 'http://localhost:5173';
+const BASE = 'http://localhost:8082';
 
 test.describe('Resume Builder E2E', () => {
 

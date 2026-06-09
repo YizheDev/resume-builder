@@ -185,19 +185,20 @@ const loadNext = async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'next' }),
     })
-    if (!res.ok) throw new Error(`API ${res.status}`)
+    if (!res.ok) throw new Error('API ' + res.status)
     const d = await res.json()
-  const data = d.data
-  aiMessage.value = data.reply
-  currentModule.value = data.module
-  currentOptions.value = data.options
-  status.value = data.status || 'chatting'
-  if (data.module === 'done' || data.status === 'ready') {
-    progress.value = 100
-    status.value = 'draft'
-  } else {
-    progress.value = Math.min(90, Math.round(progress.value + 14))
-  }
+    const data = d.data
+    aiMessage.value = data.reply
+    currentModule.value = data.module
+    currentOptions.value = data.options
+    status.value = data.status || 'chatting'
+    if (data.module === 'done' || data.status === 'ready') {
+      progress.value = 100
+      status.value = 'draft'
+      autoGenerate()
+    } else {
+      progress.value = Math.min(90, Math.round(progress.value + 14))
+    }
     selectedItems.value = []
     customInput.value = ''
     await nextTick()
@@ -206,6 +207,18 @@ const loadNext = async () => {
     console.error('loadNext failed:', e)
     aiMessage.value = '网络异常，请刷新页面重试'
   }
+}
+
+const autoGenerate = async () => {
+  try {
+    const res = await fetch('/api/resumes/' + resumeId + '/generate', { method: 'POST' })
+    const d = await res.json()
+    if (d.data?.content) {
+      for (const key of Object.keys(d.data.content)) {
+        if (d.data.content[key]) previewData[key] = d.data.content[key]
+      }
+    }
+  } catch(e) { console.error('autoGenerate failed:', e) }
 }
 
 const submitPersonal = async () => {
