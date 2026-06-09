@@ -1,16 +1,16 @@
-"""技能搜索 API（Lightcast MCP）"""
+"""技能搜索 API"""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+
+from server.services.llm_service import llm_service
 
 router = APIRouter()
 
 
 @router.get("/skills/search")
-def search_skills(q: str = "", role: str = "", limit: int = 20):
-    """
-    搜索技能关键词。
-    优先使用 Lightcast MCP (48000+ 标准化技能库)，
-    不可用时 fallback 到 DeepSeek 生成。
-    """
-    # TODO: 集成 Lightcast MCP
+async def search_skills(q: str = Query(""), role: str = Query(""), limit: int = Query(20)):
+    """搜索技能关键词（调用 DeepSeek 生成，后续可接 Lightcast MCP）"""
+    if role:
+        skills = await llm_service.generate_module_options("skills_must", role, {})
+        return {"code": 0, "data": skills[:limit]}
     return {"code": 0, "data": []}

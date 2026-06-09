@@ -1,80 +1,111 @@
 <template>
-  <div class="max-w-6xl mx-auto py-12 px-4">
-    <h1 class="text-3xl font-bold text-center mb-2">选择简历模板</h1>
-    <p class="text-gray-500 text-center mb-10">选择一套模板，开始制作你的专业简历</p>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-      <div
-        v-for="t in templates"
-        :key="t.id"
-        @click="createResume(t.id)"
-        class="bg-white rounded-xl shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden border"
-      >
-        <div :class="t.bgClass" class="h-40 flex items-center justify-center text-white text-lg font-bold">
-          {{ t.name }}
-        </div>
-        <div class="p-4">
-          <h3 class="font-semibold">{{ t.name }}</h3>
-          <p class="text-sm text-gray-500 mt-1">{{ t.desc }}</p>
-        </div>
-      </div>
+  <div class="max-w-3xl mx-auto py-20 px-4">
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold mb-3">AI 简历生成器</h1>
+      <p class="text-lg text-gray-500">不知道怎么写简历？告诉我你的背景，AI 帮你搞定一切</p>
     </div>
 
-    <!-- 已有简历 -->
-    <div v-if="resumes.length > 0">
-      <h2 class="text-xl font-semibold mb-4">已创建的简历</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div
-          v-for="r in resumes"
-          :key="r.id"
-          @click="$router.push(`/editor/${r.id}`)"
-          class="bg-white rounded-lg p-4 shadow-sm hover:shadow cursor-pointer border"
+    <div class="bg-white rounded-2xl shadow-sm p-8 border">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        介绍一下你自己（越详细越好）
+      </label>
+      <textarea
+        v-model="background"
+        rows="5"
+        class="w-full p-4 border border-gray-200 rounded-xl text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        placeholder="例如：我是 XX 大学计算机科学专业大四学生，会 Python 和 Java，做过一个电商网站课程设计，参加过 ACM 竞赛..."
+      ></textarea>
+
+      <div class="mt-6 flex gap-3 justify-center">
+        <button
+          @click="analyze"
+          :disabled="loading || !background.trim()"
+          class="px-8 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition"
         >
-          <h4 class="font-medium">{{ r.title }}</h4>
-          <p class="text-xs text-gray-400 mt-1">{{ r.updated_at?.slice(0, 10) }}</p>
-          <button @click.stop="deleteResume(r.id)" class="text-red-400 text-xs mt-2 hover:underline">删除</button>
+          {{ loading ? 'AI 分析中...' : '✨ AI 分析推荐岗位' }}
+        </button>
+        <button
+          @click="quickDemo"
+          class="px-8 py-3 border border-gray-200 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition"
+        >
+          👀 快速预览
+        </button>
+      </div>
+
+      <!-- 推荐结果 -->
+      <div v-if="recommendations.length > 0" class="mt-10">
+        <h2 class="text-xl font-semibold mb-4">🎯 AI 推荐以下岗位（可多选）</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div
+            v-for="r in recommendations"
+            :key="r.role"
+            @click="toggleRole(r)"
+            :class="['p-4 rounded-xl border-2 cursor-pointer transition', selectedRoles.includes(r.role) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300']"
+          >
+            <div class="flex justify-between items-center">
+              <span class="font-semibold">{{ r.role }}</span>
+              <span class="text-sm font-bold" :class="r.score >= 80 ? 'text-green-600' : 'text-yellow-600'">{{ r.score }}%</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">{{ r.reason }}</p>
+            <div class="flex flex-wrap gap-1 mt-2">
+              <span v-for="s in r.skills?.slice(0,4)" :key="s" class="text-xs bg-gray-100 px-2 py-0.5 rounded">{{ s }}</span>
+            </div>
+          </div>
         </div>
+
+        <button
+          v-if="selectedRoles.length > 0"
+          @click="startGenerate"
+          class="mt-6 w-full py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition"
+        >
+          开始生成 {{ selectedRoles.length }} 份简历 →
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const background = ref('')
+const loading = ref(false)
+const recommendations = ref([])
+const selectedRoles = ref([])
 
-const templates = [
-  { id: 'classic', name: '经典通用', desc: '应届生 / 实习生', bgClass: 'bg-blue-600' },
-  { id: 'professional', name: '专业简约', desc: '社招 / 经验丰富', bgClass: 'bg-gray-800' },
-  { id: 'tech', name: '技术岗', desc: '程序员 / 工程师', bgClass: 'bg-indigo-700' },
-  { id: 'minimal', name: '现代极简', desc: '设计师 / 创意岗', bgClass: 'bg-slate-600' },
-  { id: 'english', name: '英文简历', desc: '外企 / 留学申请', bgClass: 'bg-emerald-600' },
-]
-
-const resumes = ref([])
-
-onMounted(async () => {
+const analyze = async () => {
+  loading.value = true
   try {
-    const res = await fetch('/api/resumes')
+    const res = await fetch('/api/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ background: background.value }),
+    })
     const data = await res.json()
-    resumes.value = data.data || []
-  } catch (e) { /* 忽略 */ }
-})
-
-const createResume = async (templateId) => {
-  const res = await fetch('/api/resumes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: '未命名简历', template: templateId, data: '{}' })
-  })
-  const data = await res.json()
-  router.push(`/editor/${data.data.id}`)
+    recommendations.value = data.data?.recommendations || []
+  } catch (e) { alert('分析失败，请重试') }
+  finally { loading.value = false }
 }
 
-const deleteResume = async (id) => {
-  await fetch(`/api/resumes/${id}`, { method: 'DELETE' })
-  resumes.value = resumes.value.filter(r => r.id !== id)
+const toggleRole = (r) => {
+  const idx = selectedRoles.value.indexOf(r.role)
+  idx >= 0 ? selectedRoles.value.splice(idx, 1) : selectedRoles.value.push(r.role)
+}
+
+const startGenerate = async () => {
+  for (const role of selectedRoles.value) {
+    const res = await fetch('/api/resumes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, title: `${role} - 简历` }),
+    })
+    const d = await res.json()
+    if (d.data?.id) router.push(`/chat/${d.data.id}`)
+  }
+}
+
+const quickDemo = () => {
+  background.value = 'XX大学 软件工程 大四 熟悉Vue和Python 做过校园二手交易平台 参加过蓝桥杯'
+  analyze()
 }
 </script>
