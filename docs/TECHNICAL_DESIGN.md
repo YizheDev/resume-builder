@@ -1,4 +1,4 @@
-# Resume Builder — 技术设计文档（v2）
+# Resume Builder — 技术设计文档（v3 Python 版）
 
 日期：2026-06-09
 
@@ -7,183 +7,203 @@
 ## 一、技术架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Nginx :80                          │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  ┌──────────────────────────┐  ┌─────────────────┐ │
-│  │  Go Backend (:8081)       │  │  MySQL (:3306)   │ │
-│  │                           │  │                  │ │
-│  │  /api/analyze  ←───┐     │  │  resumes 表       │ │
-│  │  /api/resumes        │     │  │                  │ │
-│  │  /api/resumes/:id/chat │   │  └─────────────────┘ │
-│  │                      │     │                      │
-│  │  LLMService ─────────┘     │                      │
-│  │     │                      │                      │
-│  │     ├── 岗位分析            │                      │
-│  │     ├── 对话管理            │                      │
-│  │     └── 内容生成            │                      │
-│  │     ↓                      │                      │
-│  │  DeepSeek API               │                      │
-│  └──────────────────────────┘                       │
-│                                                      │
-│  内存: ~40MB Go + LLM 调用（外部）                    │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Nginx :80                                │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌────────────────────────────────┐  ┌──────────────────┐   │
+│  │  Python FastAPI (:8081)         │  │  MySQL (:3306)    │   │
+│  │                                 │  │                   │   │
+│  │  /api/analyze    岗位分析       │  │  resumes 表       │   │
+│  │  /api/resumes    CRUD           │  └──────────────────┘   │
+│  │  /api/resumes/:id/chat  对话    │                          │
+│  │  /api/resumes/:id/export PDF   │                          │
+│  │                                 │                          │
+│  │  ┌──────────────────────────┐  │                          │
+│  │  │  LangGraph Agent Pipeline │  │                          │
+│  │  │                          │  │                          │
+│  │  │  AnalyzeRole → AskModules│  │                          │
+│  │  │  → GenerateContent        │  │                          │
+│  │  │  → ReviewEnhance → Output│  │                          │
+│  │  └──────────────────────────┘  │                          │
+│  │           ↓                     │                          │
+│  │  DeepSeek API + resumake-mcp    │                          │
+│  └────────────────────────────────┘                          │
+│                                                               │
+│  内存: ~150MB Python + 已有 MySQL                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## 二、技术栈
 
 | 层面 | 选型 | 原因 |
 |------|------|------|
-| 后端 | Go 1.21 + Gin | 轻量，省内存 |
-| LLM | DeepSeek API | 中文好，便宜 |
-| 数据库 | MySQL 8.4 | 复用已有 |
-| 前端 | Vue 3 + Vite | 组件化 |
+| 后端框架 | **FastAPI** | 异步支持，OpenAPI 自动生成，Python 生态 |
+| LLM 编排 | **LangGraph** | 多 Agent 流程编排，Reviewer→Enhancer 天然支持 |
+| LLM 调用 | **AgentScope Python** | 统一管理 DeepSeek + 多模型 fallback |
+| PDF 生成 | **resumake-mcp** + WeasyPrint 兜底 | LaTeX 质量 PDF + 中文支持 |
+| 数据库 | MySQL 8.4 (SQLAlchemy) | 复用已有 |
+| 前端 | Vue 3 + Vite | 组件化，响应式 |
 | 样式 | Tailwind CSS | 快速开发 |
-| PDF | html2pdf.js | 浏览器端生成 |
-| Agent 框架 | AgentScope | 可选——复用 ezer-ai-assistant 的模型配置 |
+| 部署 | Docker | 多阶段构建 |
 
-## 三、核心模块
+## 三、MCP 集成
 
-### 3.1 LLMService
+### 3.1 resumake-mcp
 
-```
-LLMService
-  ├── analyzeCareer(userBackground) → []JobRecommendation
-  │     输入：用户背景文本
-  │     输出：推荐岗位列表（名称 + 匹配度 + 理由）
-  │
-  ├── chat(resumeId, userMessage, chatHistory) → AIResponse
-  │     输入：用户消息 + 历史对话 + 已收集的信息
-  │     输出：AI 回复（追问或确认）+ 更新的简历字段
-  │
-  └── polish(rawText, role) → PolishedText
-        输入：用户的原始描述 + 目标岗位
-        输出：优化后的专业措辞
+```python
+# 集成方式：通过 MCP Python SDK 调用
+from mcp import ClientSession
+
+async def generate_pdf(resume_data: dict) -> bytes:
+    """调用 resumake-mcp 生成 LaTeX 质量 PDF"""
+    async with ClientSession(...) as session:
+        result = await session.call_tool("generate_resume", resume_data)
+        return result.content[0].data  # PDF bytes
 ```
 
-### 3.2 Prompt 设计要点
+优势：
+- 9 套 LaTeX 模板，排版质量远超 HTML 转 PDF
+- 支持自然语言描述生成
+- 路径安全，文件夹管理
 
-**岗位分析 Prompt：**
+### 3.2 LangGraph Agent Pipeline
+
+```python
+from langgraph.graph import StateGraph
+
+# 参考 StackResume 的 Reviewer→Enhancer 流程
+workflow = StateGraph(ResumeState)
+workflow.add_node("analyze_role", analyze_role)       # 岗位分析
+workflow.add_node("ask_modules", ask_modules)         # 逐模块选择
+workflow.add_node("generate_content", generate)        # 内容生成
+workflow.add_node("review_enhance", review_enhance)   # AI 审查优化
+workflow.add_node("format_output", format_output)     # 格式化输出
+
+workflow.add_edge("analyze_role", "ask_modules")
+workflow.add_edge("ask_modules", "generate_content")
+workflow.add_edge("generate_content", "review_enhance")
+workflow.add_edge("review_enhance", "format_output")
 ```
-你是职业规划专家。根据以下用户背景，推荐 5 个最适合的岗位。
-对每个岗位给出：名称、匹配度(0-100)、推荐理由(一句话)、所需技能。
-输出 JSON 格式。
 
-用户背景：{input}
+### 3.3 AgentScope 模型管理
+
+```python
+import agentscope
+
+# 复用 ezer-ai-assistant 的模型配置模式
+models = {
+    "deepseek": agentscope.OpenAIChatModel(
+        model_name="deepseek-chat",
+        api_key=os.getenv("DEEPSEEK_API_KEY"),
+        base_url="https://api.deepseek.com/v1",
+    ),
+    "qwen": agentscope.DashScopeChatModel(...),  # 备用
+}
 ```
 
-**对话式生成 Prompt：**
-```
-你正在帮助用户创建一份 {岗位} 的简历。
-已收集信息：{collected}
-对话历史：{history}
+## 四、项目结构
 
-根据用户最新回复，提取有效信息更新简历字段。
-如果有信息缺失，继续追问。用友好鼓励的语气。
-输出 JSON：{ reply, fields_updated: {...}, next_question }
+```
+resume-builder/
+├── AGENTS.md
+├── AGENT_BOOTSTRAP_GUIDE.md
+├── AGENT_DEVELOPMENT_GUIDE.md
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── Makefile
+├── docs/
+│   ├── REQUIREMENTS.md
+│   └── TECHNICAL_DESIGN.md
+├── server/
+│   ├── main.py                  # FastAPI 入口
+│   ├── config.py                # 配置管理
+│   ├── database.py              # SQLAlchemy 模型
+│   ├── models/
+│   │   └── resume.py            # Resume ORM 模型
+│   ├── routers/
+│   │   ├── analyze.py           # 岗位分析 API
+│   │   ├── resumes.py           # 简历 CRUD API
+│   │   └── chat.py              # 对话 API
+│   ├── services/
+│   │   ├── llm_service.py       # LLM 调用封装
+│   │   ├── career_advisor.py    # 岗位推荐
+│   │   ├── resume_generator.py  # 简历生成 Agent
+│   │   ├── content_polisher.py  # 内容润色
+│   │   └── pdf_exporter.py      # PDF 导出（MCP）
+│   └── agents/
+│       ├── analyze_agent.py     # 岗位分析 Agent
+│       ├── module_agent.py      # 模块选择 Agent
+│       ├── generate_agent.py    # 内容生成 Agent
+│       └── review_agent.py      # 审查优化 Agent
+├── web/                         # Vue 3 前端（不变）
+│   └── ...
+└── templates/
+    └── resume_templates/        # 简历模板定义
 ```
 
-## 四、API 设计
+## 五、API 设计
 
 ```
 POST /api/analyze
   请求: { "background": "我是XX大学计算机专业..." }
-  响应: { "recommendations": [
-    { "role": "Java后端开发", "score": 92, "reason": "...", "skills": ["Spring","MySQL"] }
-  ]}
+  响应: {
+    "recommendations": [
+      { "role": "Java后端开发", "score": 92, "reason": "...", "skills": [...] }
+    ]
+  }
 
 POST /api/resumes
   请求: { "role": "Java后端开发" }
   响应: { "id": 1, "status": "chatting" }
 
 POST /api/resumes/:id/chat
-  请求: { "message": "我主要写后端接口" }
+  请求: { "message": "我勾选了API开发" }
   响应: {
-    "reply": "明白了！我还想问...",
-    "fields": { "experience[0].description": "...", "skills": ["Java","Spring"] },
-    "status": "chatting"  // chatting | ready
+    "reply": "好的，我还想了解...",
+    "module": "experience",
+    "options": [...],              # 下一轮选项
+    "updated_fields": {...}
   }
 
-GET /api/resumes/:id
-  响应: { "id": 1, "data": {...}, "status": "ready" }
+POST /api/resumes/:id/generate
+  请求: {}  # 全部模块收集完毕，一键生成
+  响应: { "status": "generating" }
 
 GET /api/resumes/:id/export?format=pdf
-  响应: PDF 文件流
+  响应: PDF 文件流（通过 resumake-mcp 生成）
 ```
 
-## 五、数据库
-
-```sql
-CREATE TABLE resumes (
-    id           INT AUTO_INCREMENT PRIMARY KEY,
-    title        VARCHAR(100) NOT NULL DEFAULT '未命名简历',
-    role         VARCHAR(100) NOT NULL,
-    template     VARCHAR(50)  DEFAULT 'classic',
-    data         JSON         NOT NULL,
-    chat_history JSON,           -- [{role,content},...]
-    status       VARCHAR(20)  DEFAULT 'chatting',
-    created_at   DATETIME    DEFAULT CURRENT_TIMESTAMP,
-    updated_at   DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-```
-
-## 六、前端页面
-
-```
-/                     首页 — 输入背景
-/recommend            推荐页 — 展示岗位列表 + 勾选
-/chat/:id             对话页 — 聊天界面 + 简历预览
-/preview/:id          预览页 — A4 预览 + 导出
-```
-
-### 对话页布局
-
-```
-┌──────────────────────────────────────────────┐
-│  左侧：对话区（60%）                          │
-│                                               │
-│  ┌─────────────────────────────────────────┐ │
-│  │ AI: 你好！我是你的简历助手。             │ │
-│  │ 看到你有电商项目经验，能具体说说吗？       │ │
-│  └─────────────────────────────────────────┘ │
-│  ┌─────────────────────────────────────────┐ │
-│  │ 用户: 我写了登录注册、商品列表、购物车    │ │
-│  └─────────────────────────────────────────┘ │
-│  ┌─────────────────────────────────────────┐ │
-│  │ AI: 很棒！我帮你整理成了专业描述：        │ │
-│  │ ✨ [生成的简历内容预览]                   │ │
-│  │ [确认] [修改]                             │ │
-│  └─────────────────────────────────────────┘ │
-│                                               │
-│  [输入框] [发送]                              │
-├──────────────────────────────────────────────┤
-│  右侧：简历实时预览（40% 缩略）               │
-│  ┌──────────────────────┐                    │
-│  │  📄 A4 纸预览          │                    │
-│  │  实时更新              │                    │
-│  └──────────────────────┘                    │
-│  [导出 PDF]                                  │
-└──────────────────────────────────────────────┘
-```
-
-## 七、部署
+## 六、部署
 
 与 ezer-ai-assistant 共用服务器：
 
 ```
 47.113.110.222
-  ├── :8080  ezer-ai-assistant (日报推送)
-  ├── :8081  resume-builder  (简历生成)
+  ├── :8080  ezer-ai-assistant (Java, 日报)
+  ├── :8081  resume-builder (Python, 简历)
   └── :3306  MySQL (共享)
 ```
 
 ```bash
 # 环境变量
-DB_USER=root
-DB_PASS=xxx
 DB_HOST=127.0.0.1
 DB_PORT=3306
+DB_USER=root
+DB_PASS=xxx
 DB_NAME=resume_builder
-DEEPSEEK_API_KEY=sk-xxx    # 复用 ezer-ai-assistant 的 key
+DEEPSEEK_API_KEY=sk-xxx
 ```
+
+## 七、对比总结
+
+| | Go 方案 | Python 方案 |
+|------|------|------|
+| 内存 | 30MB | 150MB |
+| 开发周期 | 3-4 天 | 2-3 天 |
+| MCP 集成 | 手写 | 原生 SDK |
+| Agent 框架 | 无 | LangGraph + AgentScope |
+| PDF 质量 | HTML 转 PDF | LaTeX（resumake-mcp） |
+| 中文支持 | 一般 | 丰富 |
+| 参考项目 | 0 | 3+ |

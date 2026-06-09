@@ -6,16 +6,22 @@ RUN npm install
 COPY web/ ./
 RUN npm run build
 
-# 阶段 2：构建后端
-FROM golang:1.21-alpine AS server-builder
-WORKDIR /app
-COPY server/ ./
-COPY --from=web-builder /web/dist ./static
-RUN go mod download && CGO_ENABLED=0 go build -o resume-builder .
+# 阶段 2：Python 运行环境
+FROM python:3.12-slim
 
-# 阶段 3：运行
-FROM alpine:3.19
 WORKDIR /app
-COPY --from=server-builder /app/resume-builder .
+
+# 安装系统依赖（WeasyPrint 需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libffi-dev libcairo2 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY server/ ./server/
+COPY --from=web-builder /web/dist ./static/
+
 EXPOSE 8080
-ENTRYPOINT ["./resume-builder"]
+CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8080"]

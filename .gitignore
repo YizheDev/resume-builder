@@ -34,3 +34,4 @@ Thumbs.db
 # 前端构建
 web/dist/
 .vite/
+.idea/
