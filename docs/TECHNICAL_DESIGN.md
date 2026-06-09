@@ -81,7 +81,136 @@
 | **Reactive Resume** | [amruthpillai/reactive-resume](https://github.com/amruthpillai/reactive-resume) | 100 万用户，12 模板，自托管 | 前端模板交互 |
 | **Mirror** | [prateekpuri01/mirror](https://github.com/prateekpuri01/mirror) | 双层级记忆，学习用户写作风格 | AI 记忆系统 |
 
-## 四、LangGraph Agent Pipeline
+## 四、前端架构与参考
+
+### 4.1 前端技术栈
+
+| 层面 | 选型 | 原因 |
+|------|------|------|
+| 框架 | Vue 3 (Composition API) | 组件化，响应式 |
+| 状态管理 | Pinia | Vue 3 官方推荐 |
+| UI 组件库 | **shadcn-vue** + Tailwind CSS | 现代、简洁、可定制 |
+| 图标 | Lucide Vue | 轻量，现代风格 |
+| PDF 预览 | html2pdf.js | 浏览器端渲染 A4 |
+| 路由 | Vue Router 4 | SPA 路由 |
+| 构建 | Vite 5 | 最快 |
+
+### 4.2 前端参考项目
+
+| 项目 | 仓库 | 亮点 | 我们参考 |
+|------|------|------|---------|
+| **V-Resume Builder** | [V381/V-Resume-Builder](https://github.com/V381/V-Resume-Builder) | Vue 3 + Pinia，A4 实时预览，PDF/DOC 导出 | A4 预览实现 |
+| **Vue3 Awesome CV** | [derecklhw/replicate-awesome-cv-template](https://github.com/derecklhw/replicate-awesome-cv-template) | JSON 数据驱动的 A4 模板，组件化 | 模板数据结构 |
+| **vue-resume-template** | [ryanbalieiro/vue-resume-template](https://github.com/ryanbalieiro/vue-resume-template) | 单页 A4 简历，~140 stars | 简洁排版参考 |
+| **Reactive Resume** (React) | [amruthpillai/reactive-resume](https://github.com/amruthpillai/reactive-resume) | 100 万用户，12 模板，拖拽，AI 增强 | **UX 标杆**（架构参考） |
+
+### 4.3 前端 UI 组件库对比
+
+| 方案 | Stars | 特点 | 适合我们？ |
+|------|-------|------|-----------|
+| **shadcn-vue** | 15k+ | Tailwind 原生，组件可完全定制，暗色模式 | ⭐⭐⭐ 最推荐 |
+| PrimeVue | 10k+ | 组件丰富，内置表单/图表/编辑器 | ⭐⭐ 组件多但重 |
+| Nuxt UI | 10k+ | Nuxt 专用，Vue 3 原生 | ⭐ Nuxt 绑定 |
+| Element Plus | 24k+ | 国内最流行，中文友好 | ⭐⭐ 老牌但风格偏传统 |
+
+**选择 shadcn-vue + Tailwind**，因为：
+- 组件简洁现代，适合聊天 + 表单场景
+- 完全可定制，不会出现组件库风格限制
+- 支持暗色模式（聊天界面暗色体验更好）
+- 与 Tailwind 深度整合
+
+### 4.4 核心页面组件树
+
+```
+App.vue
+├── Home.vue                          # 首页
+│   ├── HeroSection.vue               # 输入背景 + CTA
+│   ├── QuickPreview.vue              # 30秒演示
+│   └── TemplateShowcase.vue          # 模板展示
+│
+├── Recommend.vue                     # 岗位推荐
+│   ├── BackgroundInput.vue           # 背景输入（复用）
+│   ├── RoleCard.vue                  # 岗位卡片（匹配度 + 技能）
+│   └── RoleSelectPanel.vue           # 多选面板
+│
+├── ChatView.vue                      # 对话式选择
+│   ├── ChatMessage.vue               # 消息气泡（AI/用户）
+│   ├── OptionSelector.vue            # 多选列表
+│   ├── CustomInput.vue               # 自定义输入
+│   ├── ProgressSidebar.vue           # 进度可视化
+│   └── MiniPreview.vue               # 缩略预览
+│
+├── EditorView.vue                    # 编辑模式
+│   ├── ModuleSidebar.vue             # 模块导航
+│   ├── FormEditor.vue                # 表单编辑
+│   ├── InlineA4Preview.vue           # A4 实时预览
+│   ├── VersionTimeline.vue           # 版本历史
+│   └── JDTargetPanel.vue             # JD 优化面板
+│
+└── ShareView.vue                     # 分享页
+    ├── ResumeViewer.vue              # 只读预览
+    └── CommentSection.vue            # 评论
+```
+
+### 4.5 A4 预览实现方案
+
+参考 V-Resume Builder 的实现：
+```vue
+<!-- InlineA4Preview.vue -->
+<template>
+  <div class="a4-container">
+    <div class="a4-page" :style="{ width: '210mm', minHeight: '297mm' }">
+      <!-- 缩放容器 -->
+      <div class="scale-wrapper" :style="{ transform: `scale(${scale})` }">
+        <component :is="templateComponent" :data="resumeData" />
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+.a4-page {
+  background: white;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  margin: 0 auto;
+  padding: 20mm;
+}
+.scale-wrapper {
+  transform-origin: top left;
+  width: 170mm; /* 210mm - 2*20mm padding */
+}
+</style>
+```
+
+### 4.6 对话界面设计
+
+参考现代聊天应用（ChatGPT/Claude 风格）：
+- 左侧对话区 60% + 右侧 A4 缩略预览 40%
+- AI 消息：白色气泡 + 左侧对齐
+- 选项列表：卡片式多选，带推荐标签
+- 用户消息：蓝色气泡 + 右侧对齐
+- 进度条：顶部固定
+- 输入框：底部固定，支持快捷键（Enter 发送）
+
+```vue
+<!-- ChatView.vue 布局 -->
+<div class="flex h-screen">
+  <div class="w-3/5 flex flex-col">
+    <ProgressSidebar />
+    <div class="flex-1 overflow-y-auto p-6">
+      <ChatMessage v-for="msg in messages" :key="msg.id" />
+    </div>
+    <div class="p-4 border-t">
+      <ChatInput @send="handleSend" />
+    </div>
+  </div>
+  <div class="w-2/5 bg-gray-100 p-4 overflow-y-auto">
+    <MiniPreview :data="resumeData" />
+  </div>
+</div>
+```
+
+## 五、LangGraph Agent Pipeline
 
 ### 4.1 完整流程
 
