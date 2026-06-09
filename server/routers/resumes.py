@@ -43,9 +43,27 @@ def update_resume(resume_id: int, req: dict, db: Session = Depends(get_db)):
     resume = db.query(Resume).get(resume_id)
     if not resume:
         return {"code": 1, "message": "未找到"}
-    for key in ["title", "template", "data", "selections", "status"]:
+    for key in ["title", "template", "status"]:
         if key in req:
             setattr(resume, key, req[key])
+    # 合并 data 字段
+    if "data" in req:
+        existing_data = resume.data or {}
+        incoming = req["data"]
+        if isinstance(incoming, str):
+            incoming = json.loads(incoming)
+        if incoming:
+            existing_data.update(incoming)
+            from sqlalchemy.orm.attributes import flag_modified
+            resume.data = existing_data
+            flag_modified(resume, "data")
+    # 合并 selections 字段
+    if "selections" in req and req["selections"]:
+        existing_sel = resume.selections or {}
+        existing_sel.update(req["selections"])
+        resume.selections = existing_sel
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(resume, "selections")
     db.commit()
     return {"code": 0, "data": resume_to_dict(resume)}
 
@@ -64,6 +82,7 @@ def resume_to_dict(r: Resume) -> dict:
         "role": r.role,
         "template": r.template,
         "data": r.data,
+        "selections": r.selections or {},
         "status": r.status,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,

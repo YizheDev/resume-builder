@@ -6,7 +6,7 @@ module.exports = defineConfig({
   timeout: 120000,
   expect: { timeout: 10000 },
   use: {
-    baseURL: 'http://47.113.110.222:8081',
+    baseURL: 'http://localhost:5173',
     headless: true,
     screenshot: 'only-on-failure',
   },

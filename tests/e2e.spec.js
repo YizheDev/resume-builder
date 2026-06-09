@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const BASE = 'http://47.113.110.222:8081';
+const BASE = 'http://localhost:5173';
 
 test.describe('Resume Builder E2E', () => {
 
@@ -59,27 +59,34 @@ test.describe('Resume Builder E2E', () => {
     }
 
     // Step 8-12: Skip through remaining modules
-    for (let i = 0; i < 5; i++) {
-      await page.waitForTimeout(5000);
+    for (let i = 0; i < 8; i++) {
+      await page.waitForTimeout(6000);
       const body = await page.textContent('body');
-      if (body.includes('简历生成完成') || body.includes('前往编辑')) {
+      console.log('Step', i, 'body snippet:', body.substring(0, 200));
+      if (body.includes('简历生成完成') || body.includes('前往编辑') || body.includes('编辑优化')) {
         console.log('DONE at step', i);
         break;
       }
 
-      checkboxes = page.locator('input[type="checkbox"]');
-      cbCount = await checkboxes.count();
-      if (cbCount > 0) {
+      const checkboxes = page.locator('input[type="checkbox"]');
+      const cbCount = await checkboxes.count();
+      const confirmBtn = page.locator('button:has-text("确认")').filter({ hasNotText: '继续' });
+      const skipBtn = page.locator('button:has-text("跳过")');
+      const regenBtn = page.locator('button:has-text("换一批")');
+
+      if (cbCount > 0 && await confirmBtn.count() > 0) {
         await checkboxes.first().check();
-        await page.locator('button', { hasText: '确认' }).first().click();
-        console.log('Module', i, 'confirmed');
+        await confirmBtn.first().click();
+        console.log('Module', i, 'confirmed with', cbCount, 'checkboxes');
+      } else if (await skipBtn.count() > 0) {
+        await skipBtn.first().click();
+        console.log('Module', i, 'skipped');
+      } else if (await regenBtn.count() > 0) {
+        await regenBtn.first().click();
+        console.log('Module', i, 'regenerated');
       } else {
-        // Try skip
-        const skipBtn = page.locator('button:has-text("跳过")');
-        if (await skipBtn.count() > 0) {
-          await skipBtn.first().click();
-          console.log('Module', i, 'skipped');
-        }
+        console.log('Module', i, 'NO ACTION available');
+        break;
       }
     }
 
