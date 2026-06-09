@@ -35,14 +35,15 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
 
-# 生产环境挂载前端静态文件
-if os.path.exists("static"):
-    app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
 
 @app.get("/api/health")
 def health():
     return {"status": "ok", "app": "resume-builder"}
+
+
+# 生产环境挂载前端静态文件（必须在最后）
+if os.path.exists("static"):
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 if __name__ == "__main__":

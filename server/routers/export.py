@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/resumes/{resume_id}/export")
 async def export_resume(
     resume_id: int,
-    format: str = Query("html", regex="^(html|pdf)$"),
+    format: str = Query("html", pattern="^(html|pdf)$"),
     lang: str = Query("cn"),
     db: Session = Depends(get_db),
 ):
